@@ -30,3 +30,4 @@ targets:
       properties:
         com.apple.developer.associated-domains:
           - applinks:azitcrew.com
+        com.apple.developer.sign-in-with-apple: default

@@ -1,2 +1,5 @@
 // xcconfig는 `//`를 주석으로 읽어서 `$()`로 끊어줘요
 WEB_URL = https:/$()/azitcrew.com
+API_URL = https:/$()/api.azitcrew.com
+KAKAO_APP_KEY = YOUR_KAKAO_APP_KEY
+KAKAO_REDIRECT_URI = azit:/$()/oauth/kakao
