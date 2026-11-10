@@ -1,0 +1,7 @@
+.claude/tmp/
+
+*.xcodeproj
+xcuserdata/
+build/
+*.app/
+.DS_Store

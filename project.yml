@@ -1,0 +1,32 @@
+name: AZIT
+options:
+  bundleIdPrefix: com.azitcrew
+  deploymentTarget:
+    iOS: "15.0"
+configFiles:
+  Debug: Resources/dev.xcconfig
+  Release: Resources/prod.xcconfig
+targets:
+  AZIT:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Presentation
+      - Bridge
+      - path: Resources
+        excludes:
+          - "*.xcconfig"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.azitcrew.app
+        DEVELOPMENT_TEAM: 4U9PQRRKLB
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    entitlements:
+      path: Resources/AZIT.entitlements
+      properties:
+        com.apple.developer.associated-domains:
+          - applinks:azitcrew.com
