@@ -99,7 +99,7 @@ final class WebViewController: UIViewController {
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 
@@ -125,7 +125,7 @@ final class WebViewController: UIViewController {
         view.addSubview(errorContainerView)
         NSLayoutConstraint.activate([
             errorContainerView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            errorContainerView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            errorContainerView.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 

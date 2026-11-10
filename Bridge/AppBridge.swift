@@ -28,7 +28,7 @@ final class AppBridge: NSObject {
         "openLocationSettings",
         "reissueToken",
         "pickProfileImage",
-        "getAppVersion",
+        "getAppVersion"
     ]
 
     static func userScript(accessToken: String?, authStatus: String?) -> WKUserScript {
@@ -144,6 +144,42 @@ extension AppBridge: WKScriptMessageHandler {
     private func handleMethod(method: String, eventId: String, args: [JSONValue]) {
         switch method {
 
+        case "openExternalBrowser", "shareInviteCode", "shareSchedule", "openNaverMap":
+            handleExternalMethod(method: method, eventId: eventId, args: args)
+
+        case "getCurrentPosition":
+            locationHandler.getCurrentPosition(method: method, eventId: eventId)
+
+        case "getLocationPermissionStatus":
+            locationHandler.getLocationPermissionStatus(method: method, eventId: eventId)
+
+        case "openLocationSettings":
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                DispatchQueue.main.async { UIApplication.shared.open(url) }
+            }
+            respondVoid(method: method, eventId: eventId)
+
+        case "reissueToken":
+            handleReissueToken(method: method, eventId: eventId)
+
+        case "pickProfileImage":
+            guard let source = args[safe: 0]?.string else {
+                respondError(method: method, eventId: eventId); return
+            }
+            imagePickerHandler.pickProfileImage(source: source, method: method, eventId: eventId)
+
+        case "getAppVersion":
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+            respondString(method: method, eventId: eventId, value: version)
+
+        default:
+            break
+        }
+    }
+
+    private func handleExternalMethod(method: String, eventId: String, args: [JSONValue]) {
+        switch method {
+
         case "openExternalBrowser":
             guard let urlStr = args[safe: 0]?.string, let url = URL(string: urlStr) else {
                 respondError(method: method, eventId: eventId); return
@@ -176,31 +212,6 @@ extension AppBridge: WKScriptMessageHandler {
             }
             openNaverMap(address: address, lat: lat, lng: lng, method: method, eventId: eventId)
 
-        case "getCurrentPosition":
-            locationHandler.getCurrentPosition(method: method, eventId: eventId)
-
-        case "getLocationPermissionStatus":
-            locationHandler.getLocationPermissionStatus(method: method, eventId: eventId)
-
-        case "openLocationSettings":
-            if let url = URL(string: UIApplication.openSettingsURLString) {
-                DispatchQueue.main.async { UIApplication.shared.open(url) }
-            }
-            respondVoid(method: method, eventId: eventId)
-
-        case "reissueToken":
-            handleReissueToken(method: method, eventId: eventId)
-
-        case "pickProfileImage":
-            guard let source = args[safe: 0]?.string else {
-                respondError(method: method, eventId: eventId); return
-            }
-            imagePickerHandler.pickProfileImage(source: source, method: method, eventId: eventId)
-
-        case "getAppVersion":
-            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-            respondString(method: method, eventId: eventId, value: version)
-
         default:
             break
         }
@@ -211,12 +222,12 @@ extension AppBridge: WKScriptMessageHandler {
             do {
                 let result = try await AuthManager.shared.reissue()
                 self.respondObject(method: method, eventId: eventId, value: [
-                    "accessToken": result.accessToken,
+                    "accessToken": result.accessToken
                 ])
             } catch {
                 self.respondObject(method: method, eventId: eventId, value: [
                     "success": false,
-                    "message": error.localizedDescription,
+                    "message": error.localizedDescription
                 ])
             }
         }

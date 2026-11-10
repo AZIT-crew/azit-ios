@@ -29,7 +29,7 @@ final class KeychainManager {
             kSecAttrService: service,
             kSecAttrAccount: key,
             kSecValueData: data,
-            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecAttrAccessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         SecItemAdd(query as CFDictionary, nil)
     }
@@ -40,7 +40,7 @@ final class KeychainManager {
             kSecAttrService: service,
             kSecAttrAccount: key,
             kSecReturnData: true,
-            kSecMatchLimit: kSecMatchLimitOne,
+            kSecMatchLimit: kSecMatchLimitOne
         ]
         var result: AnyObject?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
@@ -52,7 +52,7 @@ final class KeychainManager {
         let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
-            kSecAttrAccount: key,
+            kSecAttrAccount: key
         ]
         SecItemDelete(query as CFDictionary)
     }

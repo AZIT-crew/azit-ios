@@ -9,19 +9,25 @@ enum JSONValue: Decodable {
     case array([JSONValue])
     case null
 
-    var string: String? { if case .string(let s) = self { return s }; return nil }
-    var number: Double? { if case .number(let n) = self { return n }; return nil }
+    var string: String? { if case .string(let value) = self { return value }; return nil }
+    var number: Double? { if case .number(let value) = self { return value }; return nil }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
+        let container = try decoder.singleValueContainer()
         // Bool 먼저 체크 (Double로 잘못 디코딩되는 것 방지)
-        if let b = try? c.decode(Bool.self) { self = .bool(b) }
-        else if let n = try? c.decode(Double.self) { self = .number(n) }
-        else if let s = try? c.decode(String.self) { self = .string(s) }
-        else if let o = try? c.decode([String: JSONValue].self) { self = .object(o) }
-        else if let a = try? c.decode([JSONValue].self) { self = .array(a) }
-        else if c.decodeNil() { self = .null }
-        else {
+        if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([String: JSONValue].self) {
+            self = .object(value)
+        } else if let value = try? container.decode([JSONValue].self) {
+            self = .array(value)
+        } else if container.decodeNil() {
+            self = .null
+        } else {
             throw DecodingError.typeMismatch(
                 JSONValue.self,
                 .init(codingPath: decoder.codingPath, debugDescription: "Unknown JSON type")

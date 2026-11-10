@@ -73,7 +73,7 @@ final class ImagePickerHandler: NSObject {
             "success": true,
             "base64": data.base64EncodedString(),
             "fileName": "profile_\(Int(Date().timeIntervalSince1970)).jpg",
-            "mimeType": "image/jpeg",
+            "mimeType": "image/jpeg"
         ])
     }
 }

@@ -146,7 +146,7 @@ final class LoginViewController: UIViewController {
             appleButton.heightAnchor.constraint(equalToConstant: 52),
 
             loadingIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            loadingIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
     }
 
@@ -179,7 +179,7 @@ final class LoginViewController: UIViewController {
         components?.queryItems = [
             URLQueryItem(name: "client_id", value: AppConfig.kakaoAppKey),
             URLQueryItem(name: "redirect_uri", value: AppConfig.kakaoRedirectURI),
-            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "response_type", value: "code")
         ]
         return components?.url
     }
@@ -216,7 +216,11 @@ final class LoginViewController: UIViewController {
 
     private func setLoading(_ loading: Bool) {
         view.isUserInteractionEnabled = !loading
-        loading ? loadingIndicator.startAnimating() : loadingIndicator.stopAnimating()
+        if loading {
+            loadingIndicator.startAnimating()
+        } else {
+            loadingIndicator.stopAnimating()
+        }
     }
 
     private func showError(_ message: String) {
