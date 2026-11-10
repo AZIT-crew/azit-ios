@@ -11,7 +11,7 @@ concurrency:
 jobs:
   deploy:
     name: Archive & Upload
-    runs-on: macos-16
+    runs-on: macos-15
     if: |
       !startsWith(github.event.head_commit.message, 'ci:') &&
       !startsWith(github.event.head_commit.message, 'chore:') &&
