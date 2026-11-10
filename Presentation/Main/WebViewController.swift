@@ -5,7 +5,9 @@ final class WebViewController: UIViewController {
 
     private let policy: WebPolicy
     private let startURL: URL
-    private var webView: WKWebView!
+    private let accessToken: String?
+    private let authStatus: String?
+    private var appBridge: AppBridge?
 
     private let activityIndicator: UIActivityIndicatorView = {
         let indicator = UIActivityIndicatorView(style: .large)
@@ -24,14 +26,28 @@ final class WebViewController: UIViewController {
         return stackView
     }()
 
-    init(policy: WebPolicy, startURL: URL) {
+    private var webView: WKWebView!
+
+    init(policy: WebPolicy, startURL: URL, accessToken: String? = nil, authStatus: String? = nil) {
         self.policy = policy
         self.startURL = startURL
+        self.accessToken = accessToken
+        self.authStatus = authStatus
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    static func makeForApp(
+        startURL: URL? = nil,
+        accessToken: String?,
+        authStatus: String?
+    ) -> WebViewController {
+        let policy = WebPolicy.app
+        let url = startURL ?? policy.baseURL
+        return WebViewController(policy: policy, startURL: url, accessToken: accessToken, authStatus: authStatus)
     }
 
     override func viewDidLoad() {
@@ -42,30 +58,37 @@ final class WebViewController: UIViewController {
         load(startURL)
     }
 
+    deinit {
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: AppBridge.handlerName)
+    }
+
     func load(_ url: URL) {
         hideError()
         webView.load(URLRequest(url: url))
     }
 
-    // MARK: - Setup
-
     private func setupWebView() {
+        let bridge = AppBridge(viewController: self)
+
         let config = WKWebViewConfiguration()
-        // 웹이 UA로 앱 여부를 판별할 수 있게 앱 이름을 붙여요
         config.applicationNameForUserAgent = "AZIT iOS"
         config.allowsInlineMediaPlayback = true
+        config.userContentController.add(bridge, name: AppBridge.handlerName)
+        config.userContentController.addUserScript(
+            AppBridge.userScript(accessToken: accessToken, authStatus: authStatus)
+        )
 
         webView = WKWebView(frame: .zero, configuration: config)
+        bridge.webView = webView
+        appBridge = bridge
+
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
-        // 상·하단 safe area를 풀고 웹이 viewport-fit=cover + env(safe-area-inset-*)로 처리해요
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.translatesAutoresizingMaskIntoConstraints = false
         #if DEBUG
-        if #available(iOS 16.4, *) {
-            webView.isInspectable = true
-        }
+        if #available(iOS 16.4, *) { webView.isInspectable = true }
         #endif
 
         view.addSubview(webView)
@@ -75,7 +98,6 @@ final class WebViewController: UIViewController {
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor)
         ])
@@ -118,8 +140,6 @@ final class WebViewController: UIViewController {
     }
 }
 
-// MARK: - WKNavigationDelegate
-
 extension WebViewController: WKNavigationDelegate {
 
     func webView(
@@ -128,8 +148,7 @@ extension WebViewController: WKNavigationDelegate {
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
         guard let url = navigationAction.request.url else {
-            decisionHandler(.cancel)
-            return
+            decisionHandler(.cancel); return
         }
         switch policy.decide(for: url) {
         case .loadInApp:
@@ -164,20 +183,14 @@ extension WebViewController: WKNavigationDelegate {
     private func handleLoadFailure(_ error: Error) {
         activityIndicator.stopAnimating()
         let nsError = error as NSError
-        // 정책으로 취소한 네비게이션(-999, WebKit 102)도 실패로 들어와서 걸러야 해요
         let isCancelled = (nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled)
             || (nsError.domain == "WebKitErrorDomain" && nsError.code == 102)
-        if !isCancelled {
-            showError()
-        }
+        if !isCancelled { showError() }
     }
 }
 
-// MARK: - WKUIDelegate
-
 extension WebViewController: WKUIDelegate {
 
-    // target=_blank 링크는 새 창을 만들지 않고 같은 웹뷰에서 정책대로 처리해요
     func webView(
         _ webView: WKWebView,
         createWebViewWith configuration: WKWebViewConfiguration,
