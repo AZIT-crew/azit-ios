@@ -28,7 +28,7 @@ jobs:
       - name: Read version and build number
         id: version
         run: |
-          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Resources/Info.plist)
+          VERSION=$(grep -A1 'CFBundleShortVersionString' Resources/Info.plist | grep '<string>' | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
           BUILD=$(git rev-list --count HEAD)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "build=$BUILD" >> $GITHUB_OUTPUT
