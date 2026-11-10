@@ -5,3 +5,6 @@ xcuserdata/
 build/
 *.app/
 .DS_Store
+
+# xcodegen이 project.yml에서 생성하는 파일
+Resources/AZIT.entitlements
