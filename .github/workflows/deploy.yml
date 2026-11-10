@@ -1,0 +1,76 @@
+name: Deploy to TestFlight
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Archive & Upload
+    runs-on: macos-16
+    if: |
+      !startsWith(github.event.head_commit.message, 'ci:') &&
+      !startsWith(github.event.head_commit.message, 'chore:') &&
+      !startsWith(github.event.head_commit.message, 'docs:')
+
+    env:
+      SCHEME: AZIT
+      KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Set build number
+        run: |
+          BUILD=$(git rev-list --count HEAD)
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" Resources/Info.plist
+          echo "Build number: $BUILD"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Set up App Store Connect API key
+        env:
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$ASC_API_KEY_P8_BASE64" | base64 --decode \
+            > ~/.appstoreconnect/private_keys/AuthKey_${{ env.KEY_ID }}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${{ env.KEY_ID }}.p8
+
+      - name: Archive
+        run: |
+          xcodebuild archive \
+            -project AZIT.xcodeproj \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/AZIT.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ env.KEY_ID }}.p8 \
+            -authenticationKeyID ${{ env.KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.ASC_API_KEY_ISSUER_ID }} \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload to TestFlight
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/AZIT.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ env.KEY_ID }}.p8 \
+            -authenticationKeyID ${{ env.KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.ASC_API_KEY_ISSUER_ID }}
