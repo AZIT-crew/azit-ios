@@ -2,6 +2,8 @@ import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
+    private static let splashDuration: TimeInterval = 2.0
+
     var window: UIWindow?
     private var webViewController: WebViewController?
 
@@ -18,9 +20,17 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         webViewController = viewController
 
         let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = viewController
+        window.rootViewController = SplashViewController()
         window.makeKeyAndVisible()
         self.window = window
+
+        // 스플래시를 잠시 보여준 뒤 웹뷰로 전환해요
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.splashDuration) { [weak window] in
+            guard let window else { return }
+            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve) {
+                window.rootViewController = viewController
+            }
+        }
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
