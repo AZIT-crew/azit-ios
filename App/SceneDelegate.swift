@@ -5,7 +5,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private static let splashDuration: TimeInterval = 2.0
 
     var window: UIWindow?
-    private var webViewController: WebViewController?
 
     func scene(
         _ scene: UIScene,
@@ -14,44 +13,65 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        let policy = WebPolicy.app
-        let startURL = initialURL(from: connectionOptions, policy: policy) ?? policy.baseURL
-        let viewController = WebViewController(policy: policy, startURL: startURL)
-        webViewController = viewController
-
         let window = UIWindow(windowScene: windowScene)
         window.rootViewController = SplashViewController()
         window.makeKeyAndVisible()
         self.window = window
 
-        // 스플래시를 잠시 보여준 뒤 웹뷰로 전환해요
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.splashDuration) { [weak window] in
-            guard let window else { return }
-            UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve) {
-                window.rootViewController = viewController
-            }
+        let deepLinkURL = connectionOptions.urlContexts.first?.url
+        let universalLinkURL = connectionOptions.userActivities.first?.webpageURL
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(Self.splashDuration * 1_000_000_000))
+            await self.transitionAfterSplash(deepLinkURL: deepLinkURL, universalLinkURL: universalLinkURL)
         }
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        guard let url = URLContexts.first?.url, let target = WebPolicy.app.webURL(fromDeepLink: url) else { return }
-        webViewController?.load(target)
+        guard let url = URLContexts.first?.url else { return }
+        guard url.scheme?.lowercased() != "azit" || url.host?.lowercased() != "oauth" else { return }
+        guard let target = WebPolicy.app.webURL(fromDeepLink: url),
+              let webVC = currentWebViewController() else { return }
+        webVC.load(target)
     }
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
               let url = userActivity.webpageURL,
-              WebPolicy.app.decide(for: url) == .loadInApp else { return }
-        webViewController?.load(url)
+              WebPolicy.app.decide(for: url) == .loadInApp,
+              let webVC = currentWebViewController() else { return }
+        webVC.load(url)
     }
 
-    private func initialURL(from options: UIScene.ConnectionOptions, policy: WebPolicy) -> URL? {
-        if let url = options.urlContexts.first?.url {
-            return policy.webURL(fromDeepLink: url)
+    @MainActor
+    private func transitionAfterSplash(deepLinkURL: URL?, universalLinkURL: URL?) async {
+        let authResult = await AuthManager.shared.initialize()
+
+        let rootVC: UIViewController
+        if let result = authResult {
+            let policy = WebPolicy.app
+            var startURL = policy.baseURL
+            if let deepLink = deepLinkURL, let url = policy.webURL(fromDeepLink: deepLink) {
+                startURL = url
+            } else if let url = universalLinkURL, policy.decide(for: url) == .loadInApp {
+                startURL = url
+            }
+            rootVC = WebViewController.makeForApp(
+                startURL: startURL,
+                accessToken: result.accessToken,
+                authStatus: result.status
+            )
+        } else {
+            rootVC = LoginViewController()
         }
-        if let url = options.userActivities.first?.webpageURL, policy.decide(for: url) == .loadInApp {
-            return url
+
+        guard let window else { return }
+        UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve) {
+            window.rootViewController = rootVC
         }
-        return nil
+    }
+
+    private func currentWebViewController() -> WebViewController? {
+        window?.rootViewController as? WebViewController
     }
 }
