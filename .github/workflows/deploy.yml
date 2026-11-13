@@ -52,6 +52,7 @@ jobs:
 
       - name: Archive
         run: |
+          set -o pipefail
           xcodebuild archive \
             -project AZIT.xcodeproj \
             -scheme "$SCHEME" \
