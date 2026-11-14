@@ -5,7 +5,7 @@ final class LocationHandler: NSObject {
 
     private weak var bridge: AppBridge?
     private let manager = CLLocationManager()
-    private var pending: (method: String, eventId: String)?
+    private var pendingId: String?
 
     init(bridge: AppBridge) {
         self.bridge = bridge
@@ -14,57 +14,57 @@ final class LocationHandler: NSObject {
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
     }
 
-    func getCurrentPosition(method: String, eventId: String) {
-        pending = (method, eventId)
+    func getCurrentPosition(id: String) {
+        pendingId = id
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
             manager.requestLocation()
         default:
-            pending = nil
-            bridge?.respondError(method: method, eventId: eventId)
+            pendingId = nil
+            bridge?.respondError(id: id)
         }
     }
 
-    func getLocationPermissionStatus(method: String, eventId: String) {
+    func getLocationPermissionStatus(id: String) {
         let status: String
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways: status = "granted"
         case .denied, .restricted: status = "denied"
         default: status = "undetermined"
         }
-        bridge?.respondString(method: method, eventId: eventId, value: status)
+        bridge?.respondString(id: id, value: status)
     }
 }
 
 extension LocationHandler: CLLocationManagerDelegate {
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        guard pending != nil else { return }
+        guard pendingId != nil else { return }
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
             manager.requestLocation()
         case .denied, .restricted:
-            if let request = pending { bridge?.respondError(method: request.method, eventId: request.eventId) }
-            pending = nil
+            if let id = pendingId { bridge?.respondError(id: id) }
+            pendingId = nil
         default:
             break
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let request = pending, let location = locations.last else { return }
-        pending = nil
-        bridge?.respondObject(method: request.method, eventId: request.eventId, value: [
+        guard let id = pendingId, let location = locations.last else { return }
+        pendingId = nil
+        bridge?.respondObject(id: id, value: [
             "latitude": location.coordinate.latitude,
             "longitude": location.coordinate.longitude
         ])
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        guard let request = pending else { return }
-        pending = nil
-        bridge?.respondError(method: request.method, eventId: request.eventId)
+        guard let id = pendingId else { return }
+        pendingId = nil
+        bridge?.respondError(id: id)
     }
 }

@@ -7,17 +7,15 @@ final class ImagePickerHandler: NSObject {
 
     private weak var bridge: AppBridge?
     private weak var viewController: UIViewController?
-    private var pendingMethod: String?
-    private var pendingEventId: String?
+    private var pendingId: String?
 
     init(bridge: AppBridge, viewController: UIViewController?) {
         self.bridge = bridge
         self.viewController = viewController
     }
 
-    func pickProfileImage(source: String, method: String, eventId: String) {
-        pendingMethod = method
-        pendingEventId = eventId
+    func pickProfileImage(source: String, id: String) {
+        pendingId = id
         DispatchQueue.main.async { [weak self] in
             if source == "camera" {
                 self?.openCamera()
@@ -55,10 +53,9 @@ final class ImagePickerHandler: NSObject {
     }
 
     private func finish(result: [String: Any]) {
-        guard let method = pendingMethod, let eventId = pendingEventId else { return }
-        pendingMethod = nil
-        pendingEventId = nil
-        bridge?.respondObject(method: method, eventId: eventId, value: result)
+        guard let id = pendingId else { return }
+        pendingId = nil
+        bridge?.respondObject(id: id, value: result)
     }
 
     private func processImage(_ image: UIImage) {

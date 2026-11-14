@@ -4,35 +4,16 @@ import WebKit
 
 private struct BridgeMessage: Decodable {
     let type: String
-    let bridgeId: String?
-    let body: BridgeBody?
-}
-
-private struct BridgeBody: Decodable {
     let method: String?
-    let eventId: String?
     let args: [JSONValue]?
+    let id: String?
 }
 
 final class AppBridge: NSObject {
 
     static let handlerName = "Bridge"
 
-    private static let methods: [String] = [
-        "openExternalBrowser",
-        "shareInviteCode",
-        "shareSchedule",
-        "openNaverMap",
-        "getCurrentPosition",
-        "getLocationPermissionStatus",
-        "openLocationSettings",
-        "reissueToken",
-        "pickProfileImage",
-        "getAppVersion"
-    ]
-
     static func userScript(accessToken: String?, authStatus: String?) -> WKUserScript {
-        let list = methods.map { "\"\($0)\"" }.joined(separator: ", ")
         let tokenExpr: String
         if let token = accessToken,
            let encoded = try? JSONEncoder().encode(token),
@@ -56,8 +37,6 @@ final class AppBridge: NSObject {
                     window.webkit.messageHandlers.\(handlerName).postMessage(msg);
                 }
             };
-            window.__bridgeMethods__ = [\(list)];
-            window.__bridgeInitialState__ = {};
             window.__accessToken__ = \(tokenExpr);
             window.__authStatus__ = \(statusExpr);
         })();
@@ -70,37 +49,34 @@ final class AppBridge: NSObject {
 
     private lazy var locationHandler = LocationHandler(bridge: self)
     private lazy var imagePickerHandler = ImagePickerHandler(bridge: self, viewController: viewController)
+    private lazy var socialLoginHandler = SocialLoginHandler(bridge: self, viewController: viewController)
 
     init(viewController: UIViewController) {
         self.viewController = viewController
     }
 
-    func respondVoid(method: String, eventId: String) {
-        emit(method: method, eventId: eventId, valueExpr: "null", threw: false)
+    func respondVoid(id: String) {
+        emitResponse(["type": "response", "id": id, "result": NSNull()])
     }
 
-    func respondString(method: String, eventId: String, value: String) {
-        guard let encoded = try? JSONEncoder().encode(value),
-              let expr = String(data: encoded, encoding: .utf8) else {
-            respondError(method: method, eventId: eventId); return
-        }
-        emit(method: method, eventId: eventId, valueExpr: expr, threw: false)
+    func respondString(id: String, value: String) {
+        emitResponse(["type": "response", "id": id, "result": value])
     }
 
-    func respondObject(method: String, eventId: String, value: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: value),
-              let expr = String(data: data, encoding: .utf8) else {
-            respondError(method: method, eventId: eventId); return
-        }
-        emit(method: method, eventId: eventId, valueExpr: expr, threw: false)
+    func respondObject(id: String, value: [String: Any]) {
+        emitResponse(["type": "response", "id": id, "result": value])
     }
 
-    func respondError(method: String, eventId: String) {
-        emit(method: method, eventId: eventId, valueExpr: "null", threw: true)
+    func respondError(id: String, message: String = "오류가 발생했습니다.") {
+        emitResponse(["type": "response", "id": id, "error": message])
     }
 
-    private func emit(method: String, eventId: String, valueExpr: String, threw: Bool) {
-        let js = "window.nativeEmitter?.emit('\(method)-\(eventId)', \(valueExpr), \(threw ? "true" : "false"))"
+    private func emitResponse(_ response: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: response),
+              let jsonStr = String(data: data, encoding: .utf8),
+              let quotedData = try? JSONEncoder().encode(jsonStr),
+              let quotedStr = String(data: quotedData, encoding: .utf8) else { return }
+        let js = "window.dispatchEvent(new MessageEvent('message', { data: \(quotedStr) }));"
         DispatchQueue.main.async { [weak self] in
             self?.webView?.evaluateJavaScript(js, completionHandler: nil)
         }
@@ -119,132 +95,105 @@ extension AppBridge: WKScriptMessageHandler {
               let msg = try? JSONDecoder().decode(BridgeMessage.self, from: data)
         else { return }
 
-        switch msg.type {
-        case "getBridgeState":
-            handleGetBridgeState()
-        case "bridge":
-            guard let body = msg.body,
-                  let method = body.method,
-                  let eventId = body.eventId
-            else { return }
-            handleMethod(method: method, eventId: eventId, args: body.args ?? [])
-        default:
-            break
-        }
+        guard msg.type == "request",
+              let method = msg.method,
+              let id = msg.id
+        else { return }
+
+        handleMethod(method: method, id: id, args: msg.args ?? [])
     }
 
-    private func handleGetBridgeState() {
-        let list = Self.methods.map { "\"\($0)\"" }.joined(separator: ", ")
-        let js = "window.nativeEmitter?.emit('hydrate', { bridgeMethods: [\(list)], nativeInitialState: {} })"
-        DispatchQueue.main.async { [weak self] in
-            self?.webView?.evaluateJavaScript(js, completionHandler: nil)
-        }
-    }
-
-    private func handleMethod(method: String, eventId: String, args: [JSONValue]) {
+    private func handleMethod(method: String, id: String, args: [JSONValue]) {
         switch method {
 
         case "openExternalBrowser", "shareInviteCode", "shareSchedule", "openNaverMap":
-            handleExternalMethod(method: method, eventId: eventId, args: args)
+            handleExternalMethod(method: method, id: id, args: args)
 
         case "getCurrentPosition":
-            locationHandler.getCurrentPosition(method: method, eventId: eventId)
+            locationHandler.getCurrentPosition(id: id)
 
         case "getLocationPermissionStatus":
-            locationHandler.getLocationPermissionStatus(method: method, eventId: eventId)
+            locationHandler.getLocationPermissionStatus(id: id)
 
         case "openLocationSettings":
             if let url = URL(string: UIApplication.openSettingsURLString) {
                 DispatchQueue.main.async { UIApplication.shared.open(url) }
             }
-            respondVoid(method: method, eventId: eventId)
-
-        case "reissueToken":
-            handleReissueToken(method: method, eventId: eventId)
+            respondVoid(id: id)
 
         case "pickProfileImage":
             guard let source = args[safe: 0]?.string else {
-                respondError(method: method, eventId: eventId); return
+                respondError(id: id); return
             }
-            imagePickerHandler.pickProfileImage(source: source, method: method, eventId: eventId)
+            imagePickerHandler.pickProfileImage(source: source, id: id)
 
         case "getAppVersion":
             let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-            respondString(method: method, eventId: eventId, value: version)
+            respondString(id: id, value: version)
+
+        case "socialLogin":
+            guard let type = args[safe: 0]?.string else {
+                respondError(id: id); return
+            }
+            socialLoginHandler.socialLogin(type: type, id: id)
 
         default:
-            break
+            respondError(id: id, message: "지원하지 않는 메서드: \(method)")
         }
     }
 
-    private func handleExternalMethod(method: String, eventId: String, args: [JSONValue]) {
+    private func handleExternalMethod(method: String, id: String, args: [JSONValue]) {
         switch method {
 
         case "openExternalBrowser":
             guard let urlStr = args[safe: 0]?.string, let url = URL(string: urlStr) else {
-                respondError(method: method, eventId: eventId); return
+                respondError(id: id); return
             }
             DispatchQueue.main.async { UIApplication.shared.open(url) }
-            respondVoid(method: method, eventId: eventId)
+            respondVoid(id: id)
 
         case "shareInviteCode":
             guard let code = args[safe: 0]?.string,
                   let crewName = args[safe: 1]?.string else {
-                respondError(method: method, eventId: eventId); return
+                respondError(id: id); return
             }
             let webURL = AppConfig.webURL.absoluteString
             let text = "[AZIT] '\(crewName)' 크루에서 당신을 초대했어요!\n\n초대 코드: \(code)\n\n\(webURL)/onboarding?inviteCode=\(code)"
-            showShareSheet(text: text, method: method, eventId: eventId)
+            showShareSheet(text: text, id: id)
 
         case "shareSchedule":
             guard let scheduleId = args[safe: 0]?.string else {
-                respondError(method: method, eventId: eventId); return
+                respondError(id: id); return
             }
             let webURL = AppConfig.webURL.absoluteString
             let text = "[AZIT 일정] 이번 주 정기런/번개런 일정 확정!\n상세 일정을 확인하고, 지금 바로 AZIT 앱에서 신청해 주세요.\n\(webURL)/schedule/\(scheduleId)"
-            showShareSheet(text: text, method: method, eventId: eventId)
+            showShareSheet(text: text, id: id)
 
         case "openNaverMap":
             guard let address = args[safe: 0]?.string,
                   let lat = args[safe: 1]?.number,
                   let lng = args[safe: 2]?.number else {
-                respondError(method: method, eventId: eventId); return
+                respondError(id: id); return
             }
-            openNaverMap(address: address, lat: lat, lng: lng, method: method, eventId: eventId)
+            openNaverMap(address: address, lat: lat, lng: lng, id: id)
 
         default:
             break
         }
     }
 
-    private func handleReissueToken(method: String, eventId: String) {
-        Task { @MainActor in
-            do {
-                let result = try await AuthManager.shared.reissue()
-                self.respondObject(method: method, eventId: eventId, value: [
-                    "accessToken": result.accessToken
-                ])
-            } catch {
-                self.respondObject(method: method, eventId: eventId, value: [
-                    "success": false,
-                    "message": error.localizedDescription
-                ])
-            }
-        }
-    }
-
-    private func showShareSheet(text: String, method: String, eventId: String) {
+    private func showShareSheet(text: String, id: String) {
         DispatchQueue.main.async { [weak self] in
             guard let vc = self?.viewController else { return }
             let activity = UIActivityViewController(activityItems: [text], applicationActivities: nil)
             activity.completionWithItemsHandler = { [weak self] _, _, _, _ in
-                self?.respondVoid(method: method, eventId: eventId)
+                self?.respondVoid(id: id)
             }
             vc.present(activity, animated: true)
         }
     }
 
-    private func openNaverMap(address: String, lat: Double, lng: Double, method: String, eventId: String) {
+    private func openNaverMap(address: String, lat: Double, lng: Double, id: String) {
         let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? address
         let appURLStr = "nmap://place?lat=\(lat)&lng=\(lng)&name=\(encoded)&appname=com.azitcrew.app"
         let storeURLStr = "https://apps.apple.com/app/id347727151"
@@ -256,7 +205,7 @@ extension AppBridge: WKScriptMessageHandler {
                     }
                 }
             }
-            self?.respondVoid(method: method, eventId: eventId)
+            self?.respondVoid(id: id)
         }
     }
 }
