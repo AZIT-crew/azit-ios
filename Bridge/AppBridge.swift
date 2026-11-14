@@ -116,10 +116,7 @@ extension AppBridge: WKScriptMessageHandler {
             locationHandler.getLocationPermissionStatus(id: id)
 
         case "openLocationSettings":
-            if let url = URL(string: UIApplication.openSettingsURLString) {
-                DispatchQueue.main.async { UIApplication.shared.open(url) }
-            }
-            respondVoid(id: id)
+            openLocationSettings(id: id)
 
         case "pickProfileImage":
             guard let source = args[safe: 0]?.string else {
@@ -180,6 +177,13 @@ extension AppBridge: WKScriptMessageHandler {
         default:
             break
         }
+    }
+
+    private func openLocationSettings(id: String) {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            DispatchQueue.main.async { UIApplication.shared.open(url) }
+        }
+        respondVoid(id: id)
     }
 
     private func showShareSheet(text: String, id: String) {

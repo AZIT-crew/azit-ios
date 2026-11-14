@@ -72,7 +72,7 @@ final class SocialLoginHandler: NSObject {
         components?.queryItems = [
             URLQueryItem(name: "client_id", value: AppConfig.kakaoAppKey),
             URLQueryItem(name: "redirect_uri", value: AppConfig.kakaoRedirectURI),
-            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "response_type", value: "code")
         ]
         return components?.url
     }
