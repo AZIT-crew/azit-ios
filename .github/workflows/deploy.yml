@@ -52,7 +52,6 @@ jobs:
 
       - name: Archive
         run: |
-          set -o pipefail
           xcodebuild archive \
             -project AZIT.xcodeproj \
             -scheme "$SCHEME" \
@@ -62,8 +61,7 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${{ env.KEY_ID }}.p8 \
             -authenticationKeyID ${{ env.KEY_ID }} \
-            -authenticationKeyIssuerID ${{ secrets.ASC_API_KEY_ISSUER_ID }} \
-            | xcbeautify --renderer github-actions
+            -authenticationKeyIssuerID ${{ secrets.ASC_API_KEY_ISSUER_ID }}
 
       - name: Upload to TestFlight
         run: |
